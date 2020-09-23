@@ -37,6 +37,7 @@ JDBC를 이용하여 사용자 정보를 DB에 넣고 관리하는 DAO 클래스
 앞으로 객체지향 기술의 원리에 스프링 스타일 코드로 개선해보는 작업을 시작
 
 ## 1.2. DAO의 분리
+
 ### 1.2.1 관심사의 분리
 
 * 소프트웨어는 끊임없이 변한다
@@ -89,7 +90,7 @@ JDBC를 이용하여 사용자 정보를 DB에 넣고 관리하는 DAO 클래스
     * 상속 자체가 가지고 있는 문제
       * 이미 NUserDao 가 다른것을 상속중이라면 대책이 없음(Java는 오직 단일 상속)
       * 상속을 통한 상하위 클래스 관계는 밀접하여 다른 관심사에 대해 긴밀한 결합을 허용
-      * fragile base class[깨지기 쉬운 기반 클래스 문제](https://m.blog.naver.com/PostView.nhn?blogId=drvoss&logNo=20185742992&proxyReferer=https:%2F%2Fwww.google.com%2F)
+      * fragile base class [(깨지기 쉬운 기반 클래스 문제)](https://m.blog.naver.com/PostView.nhn?blogId=drvoss&logNo=20185742992&proxyReferer=https:%2F%2Fwww.google.com%2F)
         * UserDao 의 변화가 클수록, NUserDao 가 의도치 않은 사이드 이펙트가 날수 있음
 
 > 디자인 패턴에서 가장 중요한 것은?
@@ -102,20 +103,26 @@ JDBC를 이용하여 사용자 정보를 DB에 넣고 관리하는 DAO 클래스
 
 ### 1.3.1. 클래스의 분리
 
-* 좀 더 다른 방식으로 분리해보자!
-  * 서로 독립적인 class 로 존재하게
-  * composition(합성) 방식
+* 상속관계는 관심사에 대해 완전히 분리시킬 수 없기 때문에 독립적인 클래스로 만듦
+* composition(합성) 방식
 
-* 하지만 합성으로 특성 클래스에 종속된다면?
-  * SimpleConnectionMaker 의 makeNewConnection() 을 이름 변경만 있어도 UserDao가 변경이 일어남.
-  * 다른종류의 SimpleConnectionMaker 와 바꾸려면? UserDao도 변경이 일어남(아래 요부분)
-  ```java
-  public UserDao() {
-      this.simpleConnectionMaker = new SimpleConnectionMaker();
+* 클래스를 분리한 후에도 자유로운 확장이 가능하게 하려면 2가지 문제를 해결해야 함
+ 1 분리한 클래스의 메소드
+  * 분리한 클래스를 사용할때 클래스마다 메소드가 다르면 매번 변경을 해야함
+  * 예를 들어, 분리한 클래스(SimpleConnectionMaker)의 메소드(makeNewConnection())의 이름이 변경되면 이를 사용하고자 하는 클래스(UserDao)도 변경을 해야함
+ 2 사용하는 클래스에서 사용하는 클래스가 어떤 것인지 구체적으로 알고 있어야 함
+  * 예를 들어, 사용하고자 하는 클래스(UserDao)는 다음과 같이 사용하는 클래스(SimpleConnectionMaker)가 무엇인지 알고 있어야 함
+  ```
+  public class UserDao() {
+      private SimpleConnectionMaker simpleConnectionMaker;
+      ...
   }
   ```
+* 이러한 문제가 발생하는 것은 사용하고자 하는 클래스가 사용하는 클래스에 종속적이기 때문
 
 ### 1.3.2. 인터페이스의 도입
+
+* 해당 문제를 해결해주기 위해 두 개의 클래스 사이에 추상적인 느슨한 연결고리를 만들어줌
 
 * 추상화란?
   * 어떤 것들의 공통적인 성격을 뽑아내어 이를 따로 분리해내는 작업
@@ -123,35 +130,40 @@ JDBC를 이용하여 사용자 정보를 DB에 넣고 관리하는 DAO 클래스
 
 * 인터페이스
   * 어떤 일을 하겠다는 기능만 정의
-  * 어떻게 하겠다는 자신을 구현한 클래스에 맞겨둠
-  * 자신을 구현한 클래스에 대한 구체적 정보를 모두 감춤
+  * 구현 방법은 나타나 있지 않음 -> 자신을 구현한 클래스에 맞겨둠
   * 인터페이스를 사용하는 코드 쪽에서는 인터페이스로 추상화한 통로(기능)만 이해하면 됨
   * 위의 특성이 모여서 -> 구현 클래스간 느슨한 연결고리 역할
 
-* 그러나 아직도 UserDao에 '어떤 ConnectionMaker 구현 클래스를 사용할지 결정'하는 코드가 남아있어 완전히 분리가 안된 상황
-
 ```java
 public UserDao() {
-    this.connectionMaker = new NConnectionMaker();
+    private ConnectionMaker ConnectionMaker; // 인터페이스를 통해 오브젝트에 접근하기 때문에 구체적인 클래스 정보를 알 필요가 없음
+
+    this.connectionMaker = new NConnectionMaker(); // But, '어떤 ConnectionMaker 구현 클래스를 사용할지 결정'하는 코드가 남아있어 완전히 분리가 안된 상황
 }
 ```
 
 ### 1.3.3. 관계설정 책임의 분리
 
-* 위의 '어떤 ConnectionMaker 구현 클래스를 사용할지 결정' 코드 문제를 해결할 기막힌 방법이 없을까?
-  * 사실 '어떤 ConnectionMaker 구현 클래스를 사용할지 결정'도 하나의 관심사다.
-  * 이 관심사는 어디다 두어야 하나?
-  * 아래에 해답이 있다
+* 어째서 완전히 분리가 되지 않는 것인가
+ * 그 이유는 UserDao 안에 또 다른 관심사항이 존재하고 있기 때문
+ * 바로 UserDao가 '어떤 ConnectionMaker 구현 클래스의 오브젝트를 이용하게 할지'를 결정하는 것
 
-* 용어
+* 이해
   * 2개의 오브젝트가 있는데 A 오브젝트가 B 오브젝트의 기능을 사용한다 가정
   * B 오브젝트가 A 오브젝트에게 서비스를 제공하는 셈
   * B 오브젝트 - 서비스 오브젝트
   * A 오브젝트 - 클라이언트 오브젝트
-
-* UserDao 와 ConnectionMaker 구현 클래스의 관계를 결정해주는 코드를 놓기에 적절한 곳은?
-  * 정답은 UserDao의 클라이언트 오브젝트! 즉 제 3의 오브젝트(외부에서 만들게)
-  * 예제에서는 UserDaoTest 라는 Test 코드에서 하도록 함.(즉 UserDaoTest가 클라이언트 오브젝트)
+  * 그렇다면 UserDao 와 ConnectionMaker 구현 클래스의 관계를 결정해주는 코드를 놓기에 적절한 곳은?
+   * 정답은 UserDao의 클라이언트 오브젝트
+   * UserDao 오브젝트와 특정 클래스(NConnectionMaker, DConnectionMaker)로부터 만들어진 ConnectionMaker 오브젝트 사이에 관계를 설정
+   * 클래스가 아니라 오브젝트 간의 관계를 설정하므로 런타임 시에 관계를 설정하여야 함
+   ```
+   Connection connectionMaker = new DConnectionMaker();
+   
+   UserDao dao = new UserDao(connectionMaker);
+   ```
+  * 코드에서 특정 클래스(DConnectionMaker)를 전혀 알지 못하더라도 해당 클래스가 구현한 인터페이스(ConnectionMaker)를 사용했다면, 그 클래스의 오브젝트를 인터페이스 타입으로 받아서 사용할 수 있음
+   * 이는 **다형성**이라는 특징이 있는 덕분
 
 ### 1.3.4. 원칙과 패턴
 
