@@ -447,12 +447,11 @@ public UserDao() {
 
 ### 1.7.3. 의존관계 검색과 주입
 
-* dependency lookup
-  * 외부로부터의 주입이 아니라 스스로 검색을 이용
-  * 자신이 필요로 하는 의존 오브젝트를 능동적으로 찾음
-  * 자신이 어떤 클래스의 오브젝트를 이용할지 결정하지 않음
-  * 런타임 시 의존관계를 맺을 오브젝트를 결정하는 것과 오브젝트의 생성작업은 외부 컨테이너에게 IoC로 맞김
-  * 의존관계를 가져오는 메소드나 생성자를 통한 주입 대신 스스로 컨테이너에 요청하는 방법
+* dependency lookup (의존관계 검색)
+  * 런타임 시 의존관계를 맺을 오브젝트를 결정하는 것과 오브젝트의 생성 작업은 외부 컨테이너에게 IoC로 맡김
+  * 가져올 때는 의존관계를 가져오는 메소드나 생성자를 통한 주입 대신 스스로 컨테이너에게 요청하는 방법 사용
+  * 코드 안에 오브젝트 펙토리 클래스나 스프링 API가 나타남
+  * 스태틱 메소드인 main()의 경우, DI를 이용해 오브젝트를 주입받을 수 없기 때문에 사용
 
 DaoFactory로 의존관계 오브젝트를 가져오는 코드
 
@@ -462,6 +461,7 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
         this.connectionMaker = daoFactory.connectionMaker();
     }
 ```
+* 스스로 IoC 컨테이너인 DaoFactory에게 요청
 
 스프링 ApplicationContext로 가져오는 코드
 
@@ -471,26 +471,18 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
         this.connectionMaker = context.getBean("connectionMaker", ConnectionMaker.class);
     }
 ```
+* getBean() 메소드가 의존관계 검색에 사용
 
 * dependency injection(의존관계 주입) vs dependency lookup(의존관계 검색)
-  * 의존관계 검색은 오브젝트 펙토리 클래스나 스프링 API가 기존 코드안에 사용됨
-  * 고로 코드가 깔끔하지 못하고 클래스간 역할분리가 완벽하지 않다.
-  * 의존관계 검색방식을 이용해야 하는경우
-    * 등록된 빈을 직접 가져와야 하는경우 - 예) UserDaoTest
-    * 가져오는 대상이 빈에 등록되지 않는 경우
+  * 의존관계 주입 - DI를 원하는 오브젝트는 자기 자신이 컨테이너가 관리하는 빈이 돼야 함
+  * 의존관계 검색 - 검색하는 오브젝트는 자기 자신이 스프링의 빈일 필요가 없음
 
 ### 1.7.4. 의존관계 주입의 응용
 
-* 기능 구현의 교환
-  * ConnectionMaker의 다양한 활용
-    * 개발용 ConnectionMaker
-    * QA용 ConnectionMaker
-    * 운영용 ConnectionMaker
-  * DI 설정 1가지만 바꾸면 간편하다.
 * 부가 기능 추가
-  * DAO 가 DB를 연결한 수를 카운트한다.
+  * DAO 가 DB를 연결한 수를 카운트하는 기능 추가하고자 함
   * Decorator Pattern 을 적용
-  * 아래 그림과 같이 Decorator역할의 CountingConnectionMaker 오브젝트를 DI 하면 끝!
+  * [관심사 분리] 자신의 관심사인 DB 연결 횟수 카운팅 작업을 마치면 다른 관심사인 실제 DB 커넥션을 만들어주는 작업을 함
 
 ![그림 1-15](readme_images/1-15.png)
 
@@ -499,7 +491,10 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
 * 지금까지는 의존관계 주입을 **생성자** 만 사용
 * 3가지 의존관계 주입 방식이 존재함
   * 생성자
+    * 한 번에 모든 필요한 파라미터를 다 받아야 함
   * 수정자 메소드를 이용한 주입(setter)
+    * 한 번에 한 개의 파라미터만 가질 수 있음
+    * 자바 코드 대신 XML을 사용하는 경우 사용하기 편리
   ```java
     public class UserDao {
         private ConnectionMaker connectionMaker;
@@ -510,9 +505,7 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
     }
   ```
   * 일반 메소드를 이용한 주입
-    * 수정자 메소드의 제약 - 한 번에 한 개의 파라메터만 가짐. setXXX로 시작되는 네이밍
-    * 여러개의 파라메터로 의존관계 주입을 원한다면 이 방식을 사용
-* 전통적으로 대부분 **수정자** 방식을 주로 선호한다
+    * 적절한 개수의 파라미터를 받을 수 있음
 
 ## 1.8. XML을 이용한 설정
 
