@@ -509,8 +509,8 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
 
 ## 1.8. XML을 이용한 설정
 
-* 오브젝트 사이의 의존관게 설정
-  * DaoFactory와 같은 자바 코드 방식
+* 오브젝트 사이의 DI 의존관계 설정정보
+  * DaoFactory와 같은 자바 클래스를 이용하는 방식
   * XML 설정 방식
     * 단순한 텍스트라 다루기 쉬움
     * 자바 컴파일과 같은 빌드가 필요 없음
@@ -519,11 +519,11 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
 ### 1.8.1. XML 설정
 
 * 하나의 bean 안의 DI 정보
-  * 빈의 이름 : getBean() 에서 가져올 때 사용
+  * 빈의 이름 : @Bean 메소드 이름, getBean() 에서 가져올 때 사용
   * 빈의 클래스 : 빈 오브젝트를 어떤 클래스를 이용해서 만들지 결정
-  * 빈의 의존 오브젝트 : 빈의 생성자, 수정자 메소드를 통해 의존 오브젝트를 넣어줌. 의존 오브젝트도 하나의 빈이므로 이름이 이을 것이고, 그 이름에 해당하는 메소드를 호출하여 의존 오브젝트를 가져옴.
-    * name 에트리뷰트 - DI에 사용할 수정자 메ㅔ소드의 프로퍼티 이름
-    * ref 에트리뷰트 - 주입할 오브젝트를 정의한 빈의 ID
+  * 빈의 의존 오브젝트 : 빈의 생성자나 수정자 메소드를 통해 의존 오브젝트를 넣어줌. 의존 오브젝트의 이름에 해당하는 메소드를 호출해서 의존 오브젝트를 가져옴
+    * name 에트리뷰트 - DI에 사용할 수정자 메소드의 프로퍼티 이름(메소드 이름에서 set을 제외한 나머지 부분)
+    * ref 에트리뷰트 - 주입할 오브젝트를 정의한 빈의 이름
 
 * 클래스 설정과 XML 설정의 대응항목
 
@@ -533,65 +533,73 @@ DaoFactory로 의존관계 오브젝트를 가져오는 코드
 | 빈의 이름  | @Bean methodName()      | <bean id=""methodName"    |
 | 빈의 클래스 | return new BeanClass(); | clsss="a.b.c...BeanClass> |
 
-* connectionMaker() 메소드의 <bean> 태그로 전환
+* connectionMaker()와 userDao()의 전환
+   ```
+ <beans>
+    <bean id="connectionMaker" class="...DConnectionMaker" />
+    <bean id="userDao" class="...UserDao">
+       <property name="connectionMaker" ref="connectionMaker" /> 
+    </bean>
+ </beans>
+  ```
 
 ### 1.8.2. XML 을 이용하는 ApplicationContext
 
 * GenericXmlApplicationContext
+  * XML에서 빈의 의존관계 정보를 이용하는 IoC/DI 작업에 사용
   * 생성자에 applicationContext.xml 의 클래스패스를 넣음
-  * 루트 기준 or 실행되는 class 기준의 클래스패스
-  * 예1) / 가 붙을경우 코드가 실행되는 패키지를 기준으로 찾음. 같은 패키지의 applicationContext.xml 이 있으면 설정정보 로딩
-  ```java
-  ApplicationContext ac = new GenericXmlApplicationContext("/applicationContext.xml");
-  ```
-  * 예2) / 가 없을 경우 클래스패스의 루트에서 applicationContext.xml 찾음
-  ```java
-  ApplicationContext ac = new GenericXmlApplicationContext("applicationContext.xml");
-  ```
+  * /는 넣을 수도 생략할 수도 있지만 항상 루트에서부터 시작하는 클래스패스
+  
 * ClassPathXmlApplicationContext
-  * 인자로 넘기는 class 오브젝트의 패키지기준으로 xml 파일 path 지정함.
-  * 예3)
+  * 인자로 넘기는 class 오브젝트의 패키지 기준으로 XML 파일 path 지정
+  * 예) UserDao 클래스 위치로부터 상대적으로 XML 파일 위치 지정
   ```java
   ApplicationContext ac = new ClassPathXmlApplicationContext("daoContext.xml", UserDao.class);
   ```
 
 ### 1.8.3. DataSource 인터페이스로 전환
 
-* 사실 Spring 에는 ConnectionMaker 와 동일한 역할을 하는게 있다. 그것은 DataSource
-* 우리가 원하는 DataSource 구현체들은 이미 다 구현되어 있고, 안정적이다.
-* connectionMaker를 스프링의 DataSource로 바꿔서 사용해보자
+* 사실 자바에는 ConnectionMaker 인터페이스와 동일한 역할(DB 커넥션을 가져오는 것)을 하는게 있음
+  * 그것은 DataSource 인터페이스
 
 ### 1.8.4. 프로퍼티 값의 주입
 
-* 다른 오브젝트의 레퍼런스만이 주입할 수 있는 것은 아니다.
-* 오브젝트가 아닌 단순 값을 DI 한다. (String, Integer 등등)
-* 예) Datasource에 DB connection 정보를 주입한다.
-  * JavaConfig 방식
+* 어떻게 XML에서 단순 정보(DB 연결 정보, ..)를 오브젝트를 초기화하는 과정에서 넣어줄 수 있을까?
+  * 자바의 경우, 수정자 메소드를 사용
   ```java
     dataSource.setDriverClass(com.mysql.jdbc.Driver.class);
     dataSource.setUrl("jdbc:mysql://localhost/springbook");
     dataSource.setUsername("spring");
     dataSource.setPassword("book");
   ```
-  * XML 방식
+  * XML의 경우, property 태그의 value 애트리뷰트 사용
   ```xml
     <property name="driverClass" value="com.mysql.jdbc.Driver"/>
     <property name="url" value="jdbc:mysql://localhost/springbook"/>
     <property name="username" value="spring"/>
     <property name="password" value="book"/>
   ```
+* value 값의 자동 변환
+  * Class 타입 오브젝트를 전달할 때 텍스트 형태로 value에 들어가게 되는데 스프링이 자동 변환을 해줌
+  * value에 지정한 텍스트 값을 적절한 자바 타입으로 변환해줌
+  * 즉, 내부적으로는 다음과 같은 변환 작업이 일어남
+  ```
+    Class driverClass = Class.forName("com.mysql.jdbc.Driver");
+    dataSource.setDriverClass(driverClass)
+  ```
 
 ## 1.9. 정리
 
-* 먼저 책임이 다른 코드를 분리하여 두 개의 클래스로 만듦(관심사의 분리, 리팩토링)
-* 그 중에서 바뀔 수 있는 쪽의 클래스는 인터페이스를 구현하도록 하고, 다른 클래스에서 인터페이스를 통해서만 접근하도록 만들었다. 이렇게 해서 인터페이스를 정의한 쪽의 구현 방법이 달라져 클래스가 바뀌더라도, 그 기능을 사용하는 클래스의 코드는 같이 수정할 필요가 없도록 만들었다(전략 패턴)
-* 이를 통해 자신의 책임 자체가 변경되는 경우 외에는 불필요한 변화가 발생하지 않도록 막아주고, 자신이 사용하는 외부 오브젝트의 기능은 자유롭게 확장하거나 변경할 수 있게 만들었다(개방 패쇄 원칙)
-* 결국 한쪽의 기능 변화가 다른 쪽의 변경을 요구하지 않아도 되게 했고(낮은 결합도), 자신의 책임과 관심사에만 순수하게 집중하는(높은 응집도) 깔끔한 코드를 만들 수 있었다.
-* 오브젝트가 생성되고 여타 오브젝트와 관계를 맺는 작업의 제어권을 별도의 오브젝트 팩토리를 만들어 넘겼다. 또는 오브젝트 팩토리의 기능을 일반화한 IoC 컨테이너로 넘겨서 오브젝트가 자신이 사용할 대상의 생성이나 선택에 관한 책임으로부터 자유롭게 만들어줬다(제어의 역전/IoC)
-* 전통적인 싱글톤 패턴 구현 방식의 단점을 살펴보고, 서버에서 사용되는 서비스 오브젝트로서의 장점을 살릴 수 있는 싱글톤을 사용하면서도 싱글턴 패턴의 단점을 극복할 수 있도록 설계된 컨테이너를 활용하는 방법에 대해 알아봤다(싱글톤 레지스트리).
-* 설계 시점과 코드에는 클래스와 인터페이스 사이의 느슨한 의존관계만 만들어놓고, 런타임시에 실제 사용할 구체적인 의존 오브젝트를 제3자(DI 컨테이너)의 도움으로 주입받아서 다이내믹한 의존관계를 갖게 해주는 IoC의 특별한 케이스를 알아봤다(의존관계 주입/DI)
-* 의존 오브젝트를 주입할 때 생성자를 이용하는 방법과 수정자 메소드를 이용하는 방법을 알아봤다(생성자 주입과 수정자 주입).
-* 마지막으로, XML을 이용해 DI 설정정보를 만드는 방법과 의존 오브젝트가 아닌 일반 값을 외부에서 설정해서 런타임 시에 주입하는 방법을 알아봤다(XML 설정).
+* 먼저 책임이 다른 코드를 분리하여 두 개의 클래스로 만듦 **(관심사의 분리, 리팩토링)**
+* 그 중에서 바뀔 수 있는 쪽의 클래스는 인터페이스를 구현하도록 하고, 다른 클래스에서 인터페이스를 통해서만 접근하도록 만듦
+* 이렇게 해서 인터페이스를 정의한 쪽의 구현 방법이 달라져 클래스가 바뀌더라도, 그 기능을 사용하는 클래스의 코드는 같이 수정할 필요가 없도록 만듦 **(전략 패턴)**
+* 이를 통해 자신의 책임 자체가 변경되는 경우 외에는 불필요한 변화가 발생하지 않도록 막아주고, 자신이 사용하는 외부 오브젝트의 기능은 자유롭게 확장하거나 변경할 수 있게 만듦 **(개방 패쇄 원칙)**
+* 결국 한쪽의 기능 변화가 다른 쪽의 변경을 요구하지 않아도 되게 했고 **(낮은 결합도)**, 자신의 책임과 관심사에만 순수하게 집중하는 **(높은 응집도)** 깔끔한 코드를 만들 수 있었음
+* 오브젝트가 생성되고 여타 오브젝트와 관계를 맺는 작업의 제어권을 별도의 오브젝트 팩토리를 만들어 넘김. 또는 오브젝트 팩토리의 기능을 일반화한 IoC 컨테이너로 넘겨서 오브젝트가 자신이 사용할 대상의 생성이나 선택에 관한 책임으로부터 자유롭게 만들어줌 **(제어의 역전/IoC)**
+* 전통적인 싱글톤 패턴 구현 방식의 단점을 살펴보고, 서버에서 사용되는 서비스 오브젝트로서의 장점을 살릴 수 있는 싱글톤을 사용하면서도 싱글턴 패턴의 단점을 극복할 수 있도록 설계된 컨테이너를 활용하는 방법에 대해 알아봄 **(싱글톤 레지스트리)**
+* 설계 시점과 코드에는 클래스와 인터페이스 사이의 느슨한 의존관계만 만들어놓고, 런타임시에 실제 사용할 구체적인 의존 오브젝트를 제3자(DI 컨테이너)의 도움으로 주입받아서 다이내믹한 의존관계를 갖게 해주는 IoC의 특별한 케이스를 알아봄 **(의존관계 주입/DI)**
+* 의존 오브젝트를 주입할 때 생성자를 이용하는 방법과 수정자 메소드를 이용하는 방법을 알아봄 **(생성자 주입과 수정자 주입)**
+* 마지막으로, XML을 이용해 DI 설정정보를 만드는 방법과 의존 오브젝트가 아닌 일반 값을 외부에서 설정해서 런타임 시에 주입하는 방법을 알아봄 **(XML 설정)**
 
 * 다시한번 스프링이란? 어떻게 오브젝트가 설계되고, 만들어지고, 어떻게 관계를 맺고 사용되는지에 관심을 갖는 프레임워크
 * 스프링의 관심 - 오브젝트와 그 관계
