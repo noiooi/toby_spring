@@ -168,23 +168,46 @@
 ### 3.3.1. 전략 클래스의 추가 정보
 
 * UserDao의 add() 메서드 적용
-  * add() 도 동일한 과정을 거침
-  * 차이점은 add 할 대상 User 오브젝트를 StatementStrategy의 생성자에서 받음
+  * deleteAll() 메서드와 달리 user라는 부가적인 정보가 필요
+  * add 할 대상 User 오브젝트를 StatementStrategy 생성시 생성자를 통해 넘겨줌
+```java
+    public class AddStatement inplements StatementStrategy {
+      User user;
+      
+      public AddStatement(User user) {
+        this.user = user;
+      }
+      
+      public PreparedStatement makePreparedStatement(Connection c) {
+        ...
+        ps.setString(1, user.getId());
+        ps.setString(2, user.getName());
+        ps.setString(3, user.getPassword());
+        ...
+      }
+      ...
+    }
+    
+    public void add(User user) throws SQLException {
+      StatementStrategy st = new AddStatement(user);
+      jdbcContextWithStatementStrategy(st);
+    }
+```
 
 ### 3.3.2. 전략과 클라이언트와의 동거
 
-* 현재의 불만점
-  * DAO 메소드마다 새로운 StatementStrategy 구현 클래스가 만들어져야 한다
-  * add()메소드의 User 처럼 부가정보가 필요할 경우에 오브젝트를 전달 받는 생성자와 이를 저장해둘 인스턴스 변수를 번거롭게 만들어야 함
+* 현재 만들어진 구조의 불만
+  1. DAO 메소드마다 새로운 StatementStrategy 구현 클래스가 만들어져야 함
+  2. add()메소드의 User 처럼 부가정보가 필요할 경우에 오브젝트를 전달 받는 생성자와 이를 저장해둘 인스턴스 변수를 번거롭게 만들어야 함
 * 해결책
   * 로컬 클래스
-    * StatementStrategy 구현 클래스를 UserDao 클래스 안의 내부 클래스로 구현함
-    * 어짜피 특정 StatementStrategy 구현 클래스는 UserDao의 메소드 로직과 강하게 결합되어 있기 때문
-    * 로컬 클래스는 선언된 클래스 안에서만 사용할 수 있다
-    * 또한 로컬클래스는 내부 클래스이기 때문에 자신이 선언된 곳의 정보에 접근할 수 있음
-      * User 직접 전달 필요없음(User final 선언 후 접근가능)
+    * 로컬 클래스는 선언된 클래스 안에서만 사용할 수 있음
+    * 불만 1. 해결 - StatementStrategy 구현 클래스를 UserDao 클래스 안의 내부 클래스로 구현함
+    * 불만 2. 해결 - 또한 로컬클래스는 내부 클래스이기 때문에 자신이 선언된 곳의 정보에 접근할 수 있음
+    * 단, 내부 클래스에서 외부의 변수를 사용할 때는 외부 변수는 반드시 final로 선언해줘야 함
   ```java
-    public void add(final User user) throws SQLException {
+    public void add(final User user) throws SQLException { // user 변수 final로 선언
+        // add() 메소드 내의 로컬 클래스로 이전
         class AddStatement implements StatementStrategy{
 
             @Override
@@ -196,16 +219,47 @@
                 return ps;
             }
         }
-        StatementStrategy st = new AddStatement();
+        StatementStrategy st = new AddStatement(); // 생성자 파라미터로 user를 전달하지 않아도 됨
         jdbcContextWithStatementStrategy(st);
     }
   ```
-
-  * 익명 내부 클래스
-    * 이름을 붙이지 않은 클래스
-    * 클래스 선언과 오브젝트 생성이 결합된 형태로 만들어짐
-    * 클래스를 재사용할 필요가 없고 구현한 인터페이스 타입으로만 사용할 경우에 유용
-    * 좀 더 간략하게 익명 내부클래스로 add() 와 deleteAll() 을 변경한다
+  > == 중첩 클래스의 종류 ==
+  >
+  > 다른 클래스 내부에 정의되는 클래스를 **중첩 클래스**라고 함
+  > 중첩 클래스는 독립적으로 오브젝트로 만들어질 수 있는 스태틱 클래스와
+  > 자신이 정의된 클래스의 오브젝트 안에서만 만들어질 수 있는 내부 클래스로 구분
+  > 범위에 따라 3가지(내부 클래스, 로컬 클래스, 익명 내부 클래스)로 구분
+  
+* 익명 내부 클래스
+  * 이름을 갖지 않는 클래스
+  * 클래스 선언과 오브젝트 생성이 결합된 형태로 만들어짐
+  * 클래스를 재사용할 필요가 없고, 구현한 인터페이스 타입으로만 사용할 경우에 유용
+  
+  ```java
+      public void add(final User user) throws SQLException {
+          jdbcContextWithStatementStrategy(
+              new StatementStrategy() {
+                  public PreparedStatement makePreparedStatement(Connection c) throws SQLException {
+                      PreparedStatement ps = c.prepareStatement("insert into users(id, name, password) values(?, ?, ?)");
+                      ps.setString(1, user.getId());
+                      ps.setString(2, user.getName());
+                      ps.setString(3, user.getPassword());
+                      return ps;
+                  }
+              }
+          );
+      }
+          
+      public void deleteAll() throws SQLException {
+          jdbcContextWithStatementStrategy(
+              new StatementStrategy() {
+                  public PreparedStatement makePreparedStatement(Connection c) throws SQLException {
+                      return c.prepareStatement("delete from users");
+                  }
+              }
+          );
+      }
+  ```
 
 ## 3.4. 컨텍스트와 DI
 
