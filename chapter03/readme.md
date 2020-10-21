@@ -315,36 +315,40 @@
   * 전략 패턴의 컨텍스트 - 템플릿
   * 익명 내부 클래스로 만들어지는 오브젝트 - 콜백
 
-### 3.5.1. 템플릿 콜백의 동작원리
+### 3.5.1. 템플릿/콜백의 동작원리
 
 * 템플릿 - 고정된 작업 흐름을 가진 코드를 재사용
 * 콜백 - 템플릿 안에서 호출되는 것을 목적으로 만든 오브젝트
 
-* 특징
-  * 콜백 - 보통 단일 메소드 인터페이스 사용
-    * 템플릿의 작업흐름 중 특정기능을 위해 한 번 호출되는 경우기 일반적이기 때문
-  * 콜백 인터페이스의 파라메터 - 템플릿의 작업흐름 중에 만들어지는 컨텍스트 정보를 전달받을 때 사용
-    * 예) makePreparedStatement() 의 Connection 객체, connection은 workWithStatementStrategy() 메소드 내에서 생성되어 전달된다.
-  * DI 방식의 전략 패턴 구조
-  * 클라이언트가 템플릿 메소드를 호출하면서 콜백 오브젝트를 전달하는 것은 메소드 레벨에서 일어나는 DI이다
-  * 전략패턴과 DI의 장점을 익명 내부 클래스 사용 전략과 결합한 독특한 활용법
+* 템플릿/콜백의 특징
+  * 템플릿/콜백 패턴의 콜백 - 보통 단일 메소드 인터페이스 사용
+    * 템플릿의 작업 흐름 중 특정 기능을 위해 한 번 호출되는 경우가 일반적이기 때문
+    * 일반적으로 하나의 메소드를 가진 인터페이스를 구현한 익명 내부 클래스로 만들어짐
+  * 콜백 인터페이스의 파라메터 - 템플릿의 작업 흐름 중에 만들어지는 컨텍스트 정보를 전달받을 때 사용
+    * 예) JdbcContext
+    * 템플릿인 workWithStatementStrategy() 메소드 내에서 생성한 Connection 오브젝트를 콜백의 메소드인 makePreparedStatement()를 실행할 때 파라미터로 넘겨줌
+  * 전략 패턴과 DI의 장점을 익명 내부 클래스 사용 전략과 결합한 독특한 활용법
+
+* JdbcContext에 적용된 템플릿/콜백
 
 ![JdbcContext에 사용된 템플릿 콜백](images/3-8.PNG)
 
 ### 3.5.2. 편리한 콜백의 재활용
 
 * 콜백의 분리와 재활용
-  * 콜백조차도 반복되는 패턴이 있다 - 단순히 prepareStatement메소드 내 sql파라메터만 바뀌는 경우가 많음
+  * 콜백조차도 반복되는 패턴이 있음
+  * 바인딩할 파라미터 없이 미리 만들어진 SQL을 이용해 PrepareStatement를 만드는 콜백
   * 중복되는 부분과 변화되는 부분을 분리
 
   ```java
     public void deleteAll() throws SQLException {
-        executeSql("delete from users");
+        executeSql("delete from users"); // SQL 문장만 파라미터로 받도록 분리
     }
   ```
 
   ```java
-    private void executeSql(final String query) throws SQLException {
+    private void executeSql(final String query) throws SQLException { 
+        // final로 선언해서 익명 내부 클래스인 콜백 안에서 직업 사용할 수 있게 해줌
         jdbcContext.workWithStatementStrategy(new StatementStrategy() {
             @Override
             public PreparedStatement makePreparedStatement(Connection c) throws SQLException {
@@ -356,8 +360,9 @@
   ```
 
 * 콜백과 템플릿의 결합
-  * 한 단계 더 나아가 executeSql메소드는 다른 DAO 에서도 사용 될 수 있다.
-  * 그렇다면 JdbcContext로 옮겨서 사용하게 하는게 어떨까?
+  * 한 단계 더 나아가 executeSql 메소드를 다른 DAO 에서도 사용 될 수 있도록 템플릿 클래스 안으로 옮겨보자
+  * JdbcContext 클래스로 콜백 생성과 템플릿 호출이 담긴 executeSql() 메소드를 옮겨도 됨
+    * Why? 굳이 Dao 메소드가 아니어도 됨, 템플릿은 JdbcContext 클래스가 아니라 workWithStatementStrategy() 메소드이기 때문
 
   ```java
     public void deleteAll() throws SQLException {
@@ -380,7 +385,6 @@
     ...
   }
   ```
-* 일반적으로 성격이 다른 코드들은 가능한 분리하지만, 반대로 하나의 목적을 위해 서로 긴밀하게 연결되어 동작하는 응집력이 강한 코드들은 한 군데 모여 있는 것이 유리
 
 ### 3.5.3. 템플릿/콜백의 응용
 
