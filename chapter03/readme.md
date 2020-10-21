@@ -271,43 +271,44 @@
   * 클라이언트 - UserDao의 메소드
   * 개별 전략 - 익명 내부 클래스
   * 컨텍스트 - jdbcContextWithStatementStrategy() 메소드
-* jdbcContextWithStatementStrategy() 는 다른 DAO 에서도 사용 가능하다.
-* jdbcContextWithStatementStrategy() 를 UserDao에서 분리하면 다른 DAO도 쓸수 있다.
-* 소스코드 참조
+* jdbcContextWithStatementStrategy() 는 다른 DAO 에서도 사용 가능
+  * 컨텍스트 메소드는 UserDao 내의 PreparedStatement를 실행하는 기능을 가진 메소드에서 공유 할 수 있음
+  * jdbcContextWithStatementStrategy() 를 UserDao에서 독립시켜 다른 DAO도 쓸 수 있게 해보자
 
 ![JdbcContext로 분리된 클래스 다이어그램](images/3-4.PNG)
 
+* UserDao와 JdbcContext는 인터페이스를 사이에 두지 않고 DI를 적용하는 특별한 구조
+  * 의존 오브젝트의 구현 클래스를 변경할 수 없음
+  * Why? JdbcContext는 그 자체로 독립적인 JDBC 컨텍스트를 제공해주는 서비스 오브젝트이며 구현 방법이 바뀔 가능성이 없음
+
 ![런타임 시에 만들어지는 오브젝트 레벨의 의존관계](images/3-5.PNG)
 
-* (주의)아직 모든 UserDao의 모든 메소드가 JdbcContext를 사용하는 것은 아님!
+* 런타임 시에 만들어지는 오브젝트 레벨의 의존 관계
 
 ### 3.4.2. JdbcContext의 특별한 DI
 
-* 스프링 bean으로 DI
-  * 인터페이스가 아닌 JdbcContext를 DAO 에 DI 해도 되는걸까? 인터페이스로 DI 해야하지 않을까?
-  * JdbcContext같이 클래스를 직접 DI 구조로 가야하는 이유
-    * JdbcContext를 싱글톤 빈으로 만들어야 하기 때문 (일종의 Service 오브젝트 성격)
-    * JdbcContext가 DI 를 통해 다른 bean(DataSource)에 의존하기 때문
-      * 스프링에서 DI를 하기 위해서 주입되는 오브젝트와 주입받는 오브젝트 둘다 bean으로 등록되어 있어야 함
-    * 인터페이스가 없는 이유는? JdbcContext와 Dao 사이에 강한 응집도를 가지기 때문
-  * But! 인터페이스 없이 클래스를 DI하는 상황은 늘 차선책으로 생각하고 개발할 것을 권유
+* 인터페이스를 사용하지 않고 DAO와 밀접한 관계를 갖는 클래스를 DI에 적용하는 방법
+* 방법 1. 스프링 빈으로 DI
+  * JdbcContext를 UserDao와 DI 구조로 만들어야 할 이유
+    * JdbcContext가 스프링 컨테이너의 싱글톤 레지스트리에서 관리되는 **싱글톤 빈**이기 때문
+    * JdbcContext가 DI 를 통해 다른 빈(DataSource)에 의존하기 때문
+      * 스프링에서 DI를 하기 위해서 주입되는 오브젝트와 주입받는 오브젝트 둘 다 스프링 빈으로 등록되어 있어야 함
+  * But! 인터페이스 없이 클래스를 DI하는 상황은 마지막 단계에서 고려해볼 사항
+  * 장점 : 오브젝트 사이의 실제 의존관계가 설정파일에 명확하게 드러남
+  * 단점 : DI의 근본적인 원칙에 부합하지 않는 구체적인 클래스와의 관계가 설정에 직접 노출됨
 
-* 코드를 이용하는 수동 DI
-  * JdbcContext를 스프링 bean으로 등록하지 않고, UserDao 내부에서 직접 생성후 DI하는 방식
-  * 수동 DI 시 문제 2가지
-    * 문제점1. 싱글톤으로 만들 수 없다.
-      * Dao에서 생성하는 방식이기 때문에 Dao갯수만큼 JdbcContext객체를 생성함
-      * 왠만한 대형 프로젝트라도 수백개 이상은 만들어지지 않을 것
-      * 따라서 용인될 만한 수준
-      * 빈번히 오브젝트가 만들어지고 제거되는 것도 아니니 GC에 무리 없음
-    * 문제점2. DataSource는 어떻게 DI 받나?
-      * JdbcContext 자신이 Bean이 아니니 DataSource를 DI 받을 수 없음
-      * 해결책 JdbcContext에 대한 제어권을 가지고 생성과 관리를 담당하는 UserDao에게 DI를 맞기는 것
-  * 수동 DI를 하는 이유
-    * 굳이 인터페이스를 두지 않아도 될 만큼 긴밀한 관계인 DAO클래스와 JdbcContext를 어색하게 빈으로 분리하지 않고 내부에서 직접 만들어 사용하면서 다른 오브젝트에 대한 DI를 적용할 수 있기 때문
-    * JdbcContext와 UserDao의 관계를 외부에 드러내지 않고 사용 가능하게 하는 것이 목적
-    * 그러나 싱글톤 문제와 DI 작업의 부차적 코드가 필요함은 단점
-
+* 방법 2. 코드를 이용하는 수동 DI
+  * JdbcContext를 스프링 빈으로 등록하지 않고, UserDao 내부에서 직접 DI를 적용하는 방식
+  * 즉, UserDao가 JdbcContext의 생성과 초기화를 책임지며 제어권을 가짐
+  * 문제 1. 싱글톤으로 만들 수 없음
+    * Dao에서 직접 생성하고 DI를 적용하는 방식이기 때문에 Dao 갯수만큼 JdbcContext 오브젝트를 생성함
+  * 문제 2. JdbcContext가 의존하는 빈(DataSource)를 주입받을 수 없음
+    * JdbcContext 자신이 빈이 아니기 때문
+    * 그래서 JdbcContext에 대한 제어권을 가지고 생성과 관리를 담당하는 UserDao에게 DI를 맡김
+    * UserDao가 의존 오브젝트(datasource)를 jdbcContext 오브젝트에게 수정자 메소드로 주입해줌
+  * 장점 : JdbcContext와 UserDao 의 관계가 외부에는 드러나지 않음
+  * 단점 : JdbcContext를 싱글톤으로 만들 수 없고, DI 작업을 위한 부가적인 코드가 필요
+  
 ## 3.5. 템플릿과 콜백
 
 * 전략 패턴의 기본 구조에 익명 내부 클래스를 활용한 방식 - 템플릿/콜백 패턴
